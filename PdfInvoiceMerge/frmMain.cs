@@ -241,15 +241,16 @@ namespace PdfInvoiceMerge
 
                     var reader = new PdfReader(p);
                     var page = writer.GetImportedPage(reader, 1);
+                    var box = ApplyVisibleBox(reader, page);
 
                     AffineTransform af = new AffineTransform();
 
-                    var scaleHeight = (size.Height - margin * 4) / 2 / page.Height;
-                    var scaleWidth = (size.Width - margin * 2) / page.Width;
+                    var scaleHeight = (size.Height - margin * 4) / 2 / box.Height;
+                    var scaleWidth = (size.Width - margin * 2) / box.Width;
                     var scale = Math.Min(scaleHeight, scaleWidth);
 
-                    var height = ((size.Height - margin * 4) / 2 - scale * page.Height) / 2;
-                    var width = ((size.Width - margin * 2) - scale * page.Width) / 2;
+                    var height = ((size.Height - margin * 4) / 2 - scale * box.Height) / 2 - scale * box.Bottom;
+                    var width = ((size.Width - margin * 2) - scale * box.Width) / 2 - scale * box.Left;
 
                     af.Translate(margin + width, margin + height + (top ? size.Height / 2 : 0));
                     af.Scale(scale, scale);
@@ -304,15 +305,16 @@ namespace PdfInvoiceMerge
 
                     var reader = new PdfReader(p);
                     var page = writer.GetImportedPage(reader, 1);
+                    var box = ApplyVisibleBox(reader, page);
 
                     AffineTransform af = new AffineTransform();
 
-                    var scaleHeight = (size.Height - margin * 4) / 2 / page.Height;
-                    var scaleWidth = (size.Width - margin * 4) / 2 / page.Width;
+                    var scaleHeight = (size.Height - margin * 4) / 2 / box.Height;
+                    var scaleWidth = (size.Width - margin * 4) / 2 / box.Width;
                     var scale = Math.Min(scaleHeight, scaleWidth);
 
-                    var height = ((size.Height - margin * 4) / 2 - scale * page.Height) / 2;
-                    var width = ((size.Width - margin * 4) / 2 - scale * page.Width) / 2;
+                    var height = ((size.Height - margin * 4) / 2 - scale * box.Height) / 2 - scale * box.Bottom;
+                    var width = ((size.Width - margin * 4) / 2 - scale * box.Width) / 2 - scale * box.Left;
 
                     switch (type)
                     {
@@ -344,6 +346,28 @@ namespace PdfInvoiceMerge
             {
                 document.Close();
             }
+        }
+
+        /// <summary>
+        /// 取页面实际可见区域（CropBox 与 MediaBox 的交集），并把导入页的裁剪范围设为该区域。
+        /// 有些发票 MediaBox 是整张 A4，但 CropBox 只框了上半部分，按 MediaBox 缩放会导致发票特别小。
+        /// </summary>
+        /// <param name="reader"></param>
+        /// <param name="page"></param>
+        /// <returns></returns>
+        private static iTextSharp.text.Rectangle ApplyVisibleBox(PdfReader reader, PdfImportedPage page)
+        {
+            var media = reader.GetPageSize(1);
+            var crop = reader.GetCropBox(1);
+            var box = new iTextSharp.text.Rectangle(
+                Math.Max(media.Left, crop.Left),
+                Math.Max(media.Bottom, crop.Bottom),
+                Math.Min(media.Right, crop.Right),
+                Math.Min(media.Top, crop.Top));
+            if (box.Width <= 0 || box.Height <= 0)
+                box = media;
+            page.BoundingBox = box;
+            return box;
         }
 
         private void sourceToolStripMenuItem_Click(object sender, EventArgs e)
